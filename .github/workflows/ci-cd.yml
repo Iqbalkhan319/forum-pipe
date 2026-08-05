@@ -1,10 +1,11 @@
+
 name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   test:
@@ -46,14 +47,14 @@ jobs:
       - name: Generate app key
         run: php artisan key:generate
 
-      - name: Set test DB env vars
+      - name: Configure test database
         run: |
           sed -i 's/DB_HOST=.*/DB_HOST=127.0.0.1/' .env
           sed -i 's/DB_DATABASE=.*/DB_DATABASE=laravel_test/' .env
           sed -i 's/DB_USERNAME=.*/DB_USERNAME=root/' .env
           sed -i 's/DB_PASSWORD=.*/DB_PASSWORD=root/' .env
 
-      - name: Directory permissions
+      - name: Set directory permissions
         run: chmod -R 777 storage bootstrap/cache
 
       - name: Install NPM dependencies
@@ -71,7 +72,7 @@ jobs:
   deploy:
     name: Deploy to Production
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -86,8 +87,6 @@ jobs:
           ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
-        env:
-          RELEASE: ${{ github.sha }}
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
             set -e
@@ -97,9 +96,8 @@ jobs:
             mkdir -p "$RELEASE_DIR"
             cd "$RELEASE_DIR"
 
-            git clone --depth 1 --branch main https://github.com/${{ github.repository }}.git .
+            git clone --depth 1 --branch master https://github.com/${{ github.repository }}.git .
 
-            # Link shared resources
             ln -nfs "$DEPLOY_PATH/shared/.env" "$RELEASE_DIR/.env"
             rm -rf "$RELEASE_DIR/storage"
             ln -nfs "$DEPLOY_PATH/shared/storage" "$RELEASE_DIR/storage"
@@ -115,16 +113,14 @@ jobs:
             php artisan view:cache
             php artisan storage:link || true
 
-            # Atomic switch
             ln -nfs "$RELEASE_DIR" "$DEPLOY_PATH/current"
 
             sudo systemctl reload php8.1-fpm
 
-            # Keep only last 5 releases
             cd "$DEPLOY_PATH/releases" && ls -dt */ | tail -n +6 | xargs -r rm -rf
           ENDSSH
 
       - name: Health check
         run: |
           sleep 5
-          curl -sSf https://yourdomain.com || exit 1
+          curl -sSf https://118.179.23.218/ || exit 1
