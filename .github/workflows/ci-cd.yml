@@ -1,4 +1,3 @@
-
 name: CI/CD Pipeline
 
 on:
@@ -57,11 +56,18 @@ jobs:
       - name: Set directory permissions
         run: chmod -R 777 storage bootstrap/cache
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.20'
+
       - name: Install NPM dependencies
         run: npm install
 
       - name: Build frontend assets
-        run: npm run production || npm run build
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: npm run production
 
       - name: Run migrations
         run: php artisan migrate --force
@@ -105,7 +111,7 @@ jobs:
             composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
             npm install
-            npm run production || npm run build
+            NODE_OPTIONS=--openssl-legacy-provider npm run production
 
             php artisan migrate --force
             php artisan config:cache
@@ -115,7 +121,7 @@ jobs:
 
             ln -nfs "$RELEASE_DIR" "$DEPLOY_PATH/current"
 
-            sudo systemctl reload php8.1-fpm
+            sudo systemctl reload php7.4-fpm
 
             cd "$DEPLOY_PATH/releases" && ls -dt */ | tail -n +6 | xargs -r rm -rf
           ENDSSH
@@ -123,4 +129,5 @@ jobs:
       - name: Health check
         run: |
           sleep 5
-          curl -sSf https://118.179.23.218/ || exit 1
+          curl -sSf -k https://118.179.23.218/ || exit 1
+
